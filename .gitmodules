@@ -1,0 +1,3 @@
+[submodule "llm-infer-report"]
+	path = llm-infer-report
+	url = https://github.com/momoway/llm-infer-report.git
