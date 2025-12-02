@@ -112,12 +112,12 @@ class RequestGenerator:
         self.request_id_counter += 1
         return request
 
-    def run(self, queue: simpy.Store, max_requests: Optional[int] = None):
+    def run(self, server, max_requests: Optional[int] = None):
         """
         Generate requests according to non-homogeneous Poisson process.
 
         Args:
-            queue: SimPy store to put generated requests
+            server: LLM server instance with enqueue_request method
             max_requests: Maximum number of requests to generate (None for unlimited)
         """
         generated = 0
@@ -138,7 +138,13 @@ class RequestGenerator:
             # Generate and enqueue request
             request = self.generate_request()
             request.queue_entry_time = self.env.now
-            queue.put(request)
+
+            # Use server's enqueue method to track queue statistics
+            if hasattr(server, 'enqueue_request'):
+                server.enqueue_request(request)
+            else:
+                # Fallback for backward compatibility (if passed a Store directly)
+                server.put(request)
 
             generated += 1
 

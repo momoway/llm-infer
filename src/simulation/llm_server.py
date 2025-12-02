@@ -54,6 +54,7 @@ class LLMInferenceServer:
 
         # Server statistics
         self.max_queue_length = 0
+        self.current_queue_length = 0  # Track current queue length manually
         self.total_queue_wait_time = 0.0
 
     def run(self):
@@ -90,54 +91,53 @@ class LLMInferenceServer:
         deadline = self.env.now + (self.batch_timeout if self.batch_timeout else float('inf'))
 
         while len(batch) < self.batch_size:
-            # Check if we have requests in queue
-            if self.request_queue:
-                # Take request from queue
-                req = self.request_queue.pop(0)
-                batch.append(req)
-            else:
-                # Wait for new request from generator
-                try:
-                    # Wait for request or timeout
-                    remaining_time = max(0, deadline - self.env.now)
-                    if remaining_time <= 0 and batch:
-                        # Timeout reached, process partial batch
-                        break
-
-                    # Try to get a request with timeout
-                    if self.batch_timeout:
-                        timeout_event = self.env.timeout(remaining_time)
-                        get_event = self.queue_store.get()
-                        result = yield timeout_event | get_event
-
-                        if get_event in result:
-                            req = result[get_event]
-                            batch.append(req)
-                            self.update_queue_stats()
-                        else:
-                            # Timeout, process partial batch if any
-                            if batch:
-                                break
-                    else:
-                        # No timeout, just wait for request
-                        req = yield self.queue_store.get()
-                        batch.append(req)
-                        self.update_queue_stats()
-
-                except simpy.Interrupt:
+            # Wait for new request from generator
+            try:
+                # Wait for request or timeout
+                remaining_time = max(0, deadline - self.env.now)
+                if remaining_time <= 0 and batch:
+                    # Timeout reached, process partial batch
                     break
+
+                # Try to get a request with timeout
+                if self.batch_timeout:
+                    timeout_event = self.env.timeout(remaining_time)
+                    get_event = self.queue_store.get()
+                    result = yield timeout_event | get_event
+
+                    if get_event in result:
+                        req = result[get_event]
+                        batch.append(req)
+                        # Decrement queue length when removing from queue
+                        self.current_queue_length -= 1
+                    else:
+                        # Timeout, process partial batch if any
+                        if batch:
+                            break
+                else:
+                    # No timeout, just wait for request
+                    req = yield self.queue_store.get()
+                    batch.append(req)
+                    # Decrement queue length when removing from queue
+                    self.current_queue_length -= 1
+
+            except simpy.Interrupt:
+                break
 
         return batch
 
     def enqueue_request(self, request: Request):
-        """Add request to queue."""
-        self.request_queue.append(request)
-        self.queue_store.put(request)
-        self.max_queue_length = max(self.max_queue_length, len(self.request_queue))
+        """
+        Add request to queue and track statistics.
 
-    def update_queue_stats(self):
-        """Update queue statistics."""
-        self.max_queue_length = max(self.max_queue_length, len(self.request_queue))
+        Note: Store has unlimited capacity by default, so put() succeeds immediately.
+        """
+        # Increment queue length
+        self.current_queue_length += 1
+        # Update max queue length
+        self.max_queue_length = max(self.max_queue_length, self.current_queue_length)
+        # Actually add to the store (immediate for unlimited Store)
+        self.queue_store.put(request)
 
     def get_statistics(self) -> dict:
         """Get comprehensive server statistics."""

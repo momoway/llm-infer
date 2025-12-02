@@ -70,8 +70,8 @@ class SimulationRunner:
         # Start server process
         env.process(server.run())
 
-        # Start request generation process
-        env.process(generator.run(server.queue_store, max_requests=self.config.num_requests))
+        # Start request generation process (pass server to track queue stats)
+        env.process(generator.run(server, max_requests=self.config.num_requests))
 
         # Run simulation until all requests are generated and processed
         # Add buffer time to ensure all requests are processed
