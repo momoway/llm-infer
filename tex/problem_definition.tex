@@ -1,0 +1,11 @@
+\section{Problem Definition and Research Questions}
+
+Building upon our initial proposal, we have refined our focus to address specific performance bottlenecks in LLM inference systems. Our simulation targets the complex interplay between batching strategies and scheduling policies in systems like vLLM \cite{kwon2023efficient} and SGLang \cite{zheng2024sglangefficientexecutionstructured}. Following are some specific problems we want to solve.
+
+\begin{itemize}
+\item \textbf{Dynamic Batch Size Adaptation} We are investigating how to dynamically adjust batch sizes based on real-time queue lengths and arrival patterns. The key challenge is determining when the throughput gains from larger batches outweigh the increased queueing delays.
+
+\item \textbf{Heterogeneous Request Handling} With requests varying from 10 to 2000+ tokens in length, we need to understand how different scheduling policies (FCFS, SJF, priority-based) handle this heterogeneity. Our focus is on minimizing p99 latency while maintaining high throughput.
+
+\item \textbf{Non-stationary Load Patterns} Real-world systems experience time-varying loads (e.g., 10x spikes during peak hours). We are modeling how different batching strategies perform under these non-homogeneous Poisson arrivals with rates $\lambda(t)$ varying from 2 to 20 requests/second.
+\end{itemize}

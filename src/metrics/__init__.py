@@ -1,0 +1,5 @@
+"""Metrics collection and analysis."""
+
+from .collector import MetricsCollector
+
+__all__ = ["MetricsCollector"]

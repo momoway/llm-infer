@@ -1,0 +1,60 @@
+\section{Planned Experiments}
+
+\subsection{Experiment Design}
+
+\textbf{Experiment 1: Batch Size Sensitivity Analysis}
+\begin{itemize}
+\item \textit{Parameters:} Batch sizes $B \in \{1, 2, 4, 8, 16, 32, 64, 128\}$
+\item \textit{Fixed conditions:} Constant arrival rate $\lambda = 10$ req/s, FCFS scheduling
+\item \textit{Metrics:} Average latency, p50/p95/p99 latency, throughput, GPU utilization
+\item \textit{Hypothesis:} Optimal batch size will be between 16-32 for this load level
+\end{itemize}
+
+\textbf{Experiment 2: Scheduling Policy Comparison}
+\begin{itemize}
+\item \textit{Policies:} FCFS, SJF (based on prompt length), Predicted-SJF (estimating output length), Priority-based (SLA-aware)
+\item \textit{Workload:} Bimodal distribution - 70\% short requests (10-50 tokens), 30\% long requests (500-2000 tokens)
+\item \textit{Metrics:} Fairness index (Jain's index), starvation rate for long requests. We will use the canonical formulation of the fairness index~ \cite{jain1984quantitative} as it is a standard, bounded metric (0 to 1) widely adopted in network and systems scheduling research to quantify fairness in resource allocation~ \cite{mittal2016universal}.
+\item \textit{Hypothesis:} SJF will minimize average latency but cause starvation for 5-10\% of long requests
+\end{itemize}
+
+\textbf{Experiment 3: Load Stress Testing}
+\begin{itemize}
+\item \textit{Scenario:} Gradual load increase from $\lambda = 1$ to $\lambda = 50$ req/s
+\item \textit{Observation:} Queue length growth, latency degradation curve, saturation point
+\item \textit{Goal:} Identify early warning indicators (e.g., queue length > 100) for system overload
+\end{itemize}
+
+\textbf{Experiment 4: Workload Distribution Sensitivity}
+\begin{itemize}
+\item \textit{Distributions tested:}
+  \begin{itemize}
+  \item Uniform(10, 500) tokens
+  \item LogNormal($\mu=4$, $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$)
+  \item Power law with $\alpha \in \{1.5, 2.0, 2.5\}$. This range of $\alpha$ (shape parameter) is chosen specifically to test system robustness against heavy-tailed distributions, which are characteristic of web server and network traffic workloads~ \cite{willinger1996bibliographical}. Values of $\alpha$ between 1 and 2 (e.g., 1.5) are known to produce extremely high "burstiness" (infinite variance), while $\alpha > 2$ (e.g., 2.0, 2.5) implies finite variance which provides a rigorous stress test for our scheduling and batching policies.
+  \end{itemize}
+\item \textit{Analysis:} How robust are optimal batch sizes across distributions?
+\end{itemize}
+
+\textbf{Experiment 5: Time-Varying Load Patterns}
+\begin{itemize}
+\item \textit{Pattern:} Sinusoidal $\lambda(t) = 10 + 8\sin(2\pi t/3600)$ (hourly variation)
+\item \textit{Strategies:} Static vs adaptive batch sizing (adjusting every 5 minutes based on queue length)
+\item \textit{Expected outcome:} Adaptive batching reduces p99 latency by 20-30\% during peak periods
+\end{itemize}
+
+\subsection{Statistical Rigor}
+Each experiment will:
+\begin{itemize}
+\item Run 30 independent replications with different random seeds
+\item Report 95\% confidence intervals for all metrics
+\item Use warm-up period of 500 requests to reach steady state
+\item Collect data from 10,000 requests post-warm-up
+\end{itemize}
+
+\subsection{Timeline}
+\begin{itemize}
+\item Week 1-2: Complete Experiments 1-2 (core functionality validation)
+\item Week 3: Run Experiments 3-4 (sensitivity analysis)
+\item Week 4: Execute Experiment 5 and compile final results
+\end{itemize}

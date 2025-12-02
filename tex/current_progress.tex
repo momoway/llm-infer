@@ -1,0 +1,77 @@
+\section{Current Progress and Implementation}
+
+\subsection{Simulation Framework}
+We have successfully implemented a basic discrete-event simulation using SimPy that models an LLM inference server with continuous batching. Our current implementation includes:
+
+\begin{itemize}
+\item \textbf{Request Generator:} Implements non-homogeneous Poisson arrivals with configurable rate functions $\lambda(t)$. Currently supports constant, step, and sinusoidal patterns.
+
+\item \textbf{Queue Management:} A priority queue system that can switch between FCFS and SJF policies. Requests are tagged with arrival time, prompt length, and expected output length.
+
+\item \textbf{Batch Processor:} Simulates GPU inference with realistic timing models:
+  \begin{itemize}
+  \item Prefill time: $T_{prefill} = \alpha \cdot \sum_{i \in batch} l_{prompt,i} + \beta$
+  \item Decode time: $T_{decode} = \gamma \cdot \max_{i \in batch} l_{output,i} \cdot |batch|$
+  \item Where $\alpha = 0.001$s/token, $\beta = 0.05$s overhead, $\gamma = 0.0005$s/token
+  \end{itemize}
+\end{itemize}
+
+\subsubsection{Formulation of the LLM Inference Server Model}
+For a formal model, we define our server based on the well-established two-phase execution of autoregressive LLM inference~ \cite{kwon2023efficient}.
+
+\begin{enumerate}
+    \item \textbf{Phase 1: Prefill (Prompt Processing):} This phase processes the input prompt ($l_{prompt}$) in parallel to generate the KV cache for the first token. This operation is \textbf{compute-bound}, characterized by highly parallelized matrix-matrix operations that effectively saturate GPU compute. As such, its execution time scales approximately linearly with the \textit{total} number of tokens being processed in the batch.
+
+    \item \textbf{Phase 2: Decode (Token Generation):} This phase generates subsequent tokens autoregressively, one at a time. Each step is a \textbf{memory-bound} operation (a matrix-vector operation) that is latency-dominated by data transfer (weights, KV cache) and typically underutilizes GPU compute.
+\end{enumerate}
+
+Our simulation captures this dichotomy using a simplified, linear performance model:
+
+\begin{itemize}
+    \item \textbf{Prefill Time ($T_{prefill}$):} We model the batch prefill time as:
+    $$T_{prefill}=\alpha\cdot\sum_{i\in batch}l_{prompt,i}+\beta$$
+    Here, $\alpha$ represents the per-token processing time, reflecting the compute-bound nature of this phase. $\beta$ is a fixed overhead for batch processing setup.
+
+    \item \textbf{Decode Time ($T_{decode\_total}$):} We model the time for the \textit{entire batch} to complete decoding based on iterative steps:
+    $$T_{decode\_total} = T_{decode\_step} \times \max_{i \in batch} l_{output, i}$$
+    This formula is a key simplification. We assume a single decode \textit{step} (generating one token for all requests in the batch) takes a constant time $T_{decode\_step} = \gamma$. The batch must perform $N = \max_{i \in batch} l_{output, i}$ such steps until the longest request completes.
+\end{itemize}
+
+\textbf{Justification of Assumptions:}
+Our model, $T_{prefill} \propto \sum l_{prompt}$ and $T_{decode\_total} \propto \max(l_{output})$, is a first-order approximation. We explicitly assume the time per decode step ($\gamma$) is constant. While in reality decode throughput \textit{does} scale with batch size, its performance characteristics remain fundamentally memory-bound and distinct from prefill. This model allows us to capture the essential queueing behavior---where short prefill requests can be blocked by long-running decode batches---which is the central tradeoff studied by systems like vLLM~ \cite{kwon2023efficient} and Sarathi-Serve.
+
+Based on this formulation, our parameters are defined as:
+\begin{itemize}
+    \item Prefill: $\alpha=0.001$s/token, $\beta=0.05$s overhead.
+    \item Decode: $\gamma = T_{decode\_step} = 0.0005$s/step.
+\end{itemize}
+
+\subsection{Initial Results}
+Our preliminary simulations with 1000 requests show:
+\begin{itemize}
+\item Batch size of 32 provides best latency-throughput balance for moderate loads ($\lambda = 5$ req/s)
+\item FCFS scheduling shows 15\% lower average latency but 40\% higher p99 latency compared to SJF
+\item System utilization plateaus at 85\% for batch sizes above 64
+\end{itemize}
+
+\subsection{Implementation Architecture}
+Our simulation follows an event-driven architecture with three main components:
+
+\textbf{1. Request Generation Module:} Generates requests with prompt lengths from LogNormal($\mu=4, \sigma=1.5$) and output lengths from TruncatedNormal($\mu=100, \sigma=30$). Our choice of a LogNormal distribution is empirically grounded; it is widely used to model heavy-tailed, skewed workloads common in systems~ \cite{arlitt1996web} and specifically for modeling token and request distributions in real-world LLM traces like ShareGPT.
+
+\textbf{2. Scheduling Engine:} Implements multiple policies:
+\begin{itemize}
+\item FCFS: Simple queue ordering
+\item SJF: Sorts by prompt length
+\item Predicted-SJF: Estimates total processing time
+\end{itemize}
+
+\textbf{3. Batch Processing Pipeline:}
+\begin{itemize}
+\item Accumulates requests until batch\_size reached or timeout
+\item Computes prefill for all prompts in parallel
+\item Iteratively generates tokens until all requests complete
+\item Tracks per-request and per-batch metrics
+\end{itemize}
+
+The simulation maintains detailed logs for each request including arrival time, queue wait time, processing start/end, and total tokens generated, enabling comprehensive performance analysis.
