@@ -16,12 +16,16 @@ class BatchProcessor:
     def __init__(
         self,
         env: simpy.Environment,
-        alpha: float = 0.001,  # Prefill time per token (s/token)
-        beta: float = 0.05,     # Prefill overhead (s)
-        gamma: float = 0.0005,  # Decode time per step (s/step)
+        alpha: float = 0.00015,  # Prefill time per token (s/token) - 0.15ms
+        beta: float = 0.008,     # Prefill overhead (s) - 8ms
+        gamma: float = 0.010,    # Decode time per step (s/step) - 10ms
     ):
         """
-        Initialize batch processor with timing parameters from report.
+        Initialize batch processor with timing parameters.
+        
+        Calibrated for realistic GPU performance (~18 req/s saturation at B=32):
+        - Prefill: ~0.15ms per token (compute-bound, parallelizable)
+        - Decode: ~10ms per step (memory-bound, sequential)
 
         Args:
             env: SimPy environment

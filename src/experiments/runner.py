@@ -6,8 +6,9 @@ from .config import SimulationConfig
 from ..simulation import (
     RequestGenerator,
     LLMInferenceServer,
+    AdaptiveBatchingServer,
     constant_rate,
-    step_rate,
+    step_rate as step_rate_func,
     sinusoidal_rate,
 )
 from ..scheduling import get_policy
@@ -103,8 +104,8 @@ class SimulationRunner:
 
         elif pattern == "step":
             step_time = params.get("step_time", 1000)
-            step_rate = params.get("step_rate", self.config.arrival_rate * 2)
-            return step_rate(self.config.arrival_rate, step_time, step_rate)
+            step_rate_val = params.get("step_rate", self.config.arrival_rate * 2)
+            return step_rate_func(self.config.arrival_rate, step_time, step_rate_val)
 
         elif pattern == "sinusoidal":
             amplitude = params.get("amplitude", self.config.arrival_rate * 0.8)

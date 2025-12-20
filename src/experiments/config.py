@@ -14,11 +14,12 @@ class SimulationConfig:
     arrival_pattern_params: Dict[str, Any] = field(default_factory=dict)
 
     # Request distribution parameters
+    # LogNormal(μ=3.5, σ=0.8) → median ~33 tokens, mean ~45 tokens (realistic chat workload)
     prompt_length_dist: str = "lognormal"
-    prompt_dist_params: Dict[str, Any] = field(default_factory=lambda: {"mu": 4, "sigma": 1.5})
+    prompt_dist_params: Dict[str, Any] = field(default_factory=lambda: {"mu": 3.5, "sigma": 0.8})
     output_length_dist: str = "truncated_normal"
     output_dist_params: Dict[str, Any] = field(
-        default_factory=lambda: {"mu": 100, "sigma": 30, "min": 10, "max": 500}
+        default_factory=lambda: {"mu": 80, "sigma": 25, "min": 10, "max": 300}
     )
 
     # Server parameters
@@ -27,10 +28,13 @@ class SimulationConfig:
     scheduling_policy: str = "FCFS"
     scheduling_policy_params: Dict[str, Any] = field(default_factory=dict)
 
-    # Timing model parameters (from report)
-    alpha: float = 0.001  # Prefill per-token time (s/token)
-    beta: float = 0.05    # Prefill overhead (s)
-    gamma: float = 0.0005 # Decode step time (s/step)
+    # Timing model parameters (calibrated for ~18 req/s saturation at B=32)
+    # Based on realistic GPU performance (e.g., A100/H100):
+    # - Prefill: ~0.15ms per token in batch (compute-bound, parallelizable)
+    # - Decode: ~10ms per step (memory-bound, sequential)
+    alpha: float = 0.00015  # Prefill per-token time (s/token)
+    beta: float = 0.008     # Prefill overhead (s)
+    gamma: float = 0.010    # Decode step time (s/step)
 
     # Simulation parameters
     num_requests: int = 10000

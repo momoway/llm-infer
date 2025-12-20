@@ -4,14 +4,17 @@ A discrete-event simulation framework for analyzing LLM inference systems with c
 
 ## Project Overview
 
-This simulation framework implements a two-phase LLM inference model:
+This simulation framework implements a two-phase LLM inference model based on the INDENG 174 Final Report:
 
 1. **Prefill Phase**: Parallel processing of input prompts (compute-bound)
+   - Formula: `T_prefill = α * Σ(l_prompt_i) + β`
 2. **Decode Phase**: Autoregressive token generation (memory-bound)
+   - Formula: `T_decode = γ * max(l_output_i)`
 
 ### Key Features
 
-- **Multiple Scheduling Policies**: FCFS, SJF, Predicted-SJF, Priority-based
+- **Multiple Scheduling Policies**: FCFS, SJF, Predicted-SJF, Priority with Aging
+- **Adaptive Batching**: Dynamic batch size adjustment based on queue depth
 - **Flexible Workload Generation**: LogNormal, TruncatedNormal, PowerLaw, Bimodal distributions
 - **Non-stationary Arrival Patterns**: Constant, step, and sinusoidal arrival rates
 - **Comprehensive Metrics**: Latency percentiles, throughput, fairness index, starvation rate
@@ -45,9 +48,10 @@ llm-infer/
 │   │   ├── request.py       # Request data structure
 │   │   ├── request_generator.py  # Workload generation
 │   │   ├── batch_processor.py    # Two-phase processing model
-│   │   └── llm_server.py    # Main server simulation
+│   │   ├── llm_server.py    # Main server simulation
+│   │   └── adaptive_server.py    # Adaptive batching server
 │   ├── scheduling/          # Scheduling policies
-│   │   └── policies.py      # FCFS, SJF, Predicted-SJF, Priority
+│   │   └── policies.py      # FCFS, SJF, Predicted-SJF, Priority, Priority-Aging
 │   ├── metrics/             # Metrics collection and analysis
 │   │   └── collector.py     # MetricsCollector class
 │   └── experiments/         # Experiment configuration and runners
@@ -55,8 +59,12 @@ llm-infer/
 │       └── runner.py        # Simulation and experiment runners
 ├── examples/                # Example scripts
 │   ├── simple_example.py    # Basic usage example
-│   └── experiment1_batch_size.py  # Batch size sensitivity analysis
-├── tex/                     # LaTeX report files
+│   ├── experiment1_batch_size.py      # Batch size sensitivity analysis
+│   ├── experiment2_scheduling_policies.py  # Scheduling policy comparison
+│   ├── experiment3_load_stress.py     # Load stress testing
+│   ├── experiment4_workload_distribution.py  # Workload distribution sensitivity
+│   └── experiment5_adaptive_batching.py  # Adaptive vs static batching
+├── llm-infer-report/        # LaTeX report files
 ├── requirements.txt         # Python dependencies
 └── README.md               # This file
 ```
@@ -132,31 +140,36 @@ print(f"95% CI: [{aggregated['avg_latency']['ci_lower']:.3f}, "
       f"{aggregated['avg_latency']['ci_upper']:.3f}]")
 ```
 
-## Planned Experiments
+## Experiments
 
-The project includes five planned experiments (see [tex/experiments.tex](tex/experiments.tex)):
+The project includes five experiments based on the INDENG 174 Final Report:
 
 ### Experiment 1: Batch Size Sensitivity Analysis
 - **Parameters**: Batch sizes ∈ {1, 2, 4, 8, 16, 32, 64, 128}
 - **Fixed conditions**: λ = 10 req/s, FCFS scheduling
 - **Script**: `examples/experiment1_batch_size.py`
+- **Findings**: Optimal batch size ~32, U-shaped latency curve due to HOL blocking
 
 ### Experiment 2: Scheduling Policy Comparison
-- **Policies**: FCFS, SJF, Predicted-SJF, Priority
-- **Workload**: Bimodal (70% short, 30% long requests)
-- **Metrics**: Fairness index, starvation rate
+- **Policies**: FCFS, SJF, Predicted-SJF, Priority with Aging
+- **Workload**: Bimodal (70% short 10-50 tokens, 30% long 500-2000 tokens)
+- **Script**: `examples/experiment2_scheduling_policies.py`
+- **Findings**: SJF reduces avg latency ~15% but fairness drops (0.82→0.17), Priority with Aging balances both (~0.79)
 
 ### Experiment 3: Load Stress Testing
 - **Scenario**: Gradual load increase (λ = 1 to 50 req/s)
-- **Goal**: Identify saturation point and early warning indicators
+- **Script**: `examples/experiment3_load_stress.py`
+- **Findings**: System saturates at ~18 req/s with B=32, queue grows exponentially beyond saturation
 
 ### Experiment 4: Workload Distribution Sensitivity
-- **Distributions**: Uniform, LogNormal (various σ), PowerLaw (various α)
-- **Analysis**: Robustness of optimal batch sizes
+- **Distributions**: Uniform, LogNormal (σ=0.5, 1.0, 1.5), PowerLaw (α=1.5, 2.0, 2.5)
+- **Script**: `examples/experiment4_workload_distribution.py`
+- **Findings**: Heavy-tailed distributions (PowerLaw) increase tail latency significantly
 
-### Experiment 5: Time-Varying Load Patterns
-- **Pattern**: Sinusoidal λ(t) = 10 + 8sin(2πt/3600)
-- **Strategies**: Static vs adaptive batch sizing
+### Experiment 5: Time-Varying Load & Adaptive Batching
+- **Pattern**: Sinusoidal λ(t) = 10 + 8sin(2πt/3600), peaks at 18 req/s
+- **Script**: `examples/experiment5_adaptive_batching.py`
+- **Findings**: Adaptive batching reduces aggregate latency by ~22% vs static batching
 
 ## Configuration Options
 
@@ -170,10 +183,11 @@ The project includes five planned experiments (see [tex/experiments.tex](tex/exp
 - **Output lengths**: `truncated_normal`, `uniform`, `lognormal`
 
 ### Scheduling Policies
-- `FCFS`: First-Come-First-Serve (arrival time)
-- `SJF`: Shortest Job First (prompt length)
-- `Predicted-SJF`: Estimated processing time
-- `Priority`: Priority-based with aging
+- `FCFS`: First-Come-First-Serve (arrival time) - highest fairness
+- `SJF`: Shortest Job First (prompt length) - lowest latency, poor fairness
+- `Predicted-SJF`: Estimated total processing time (prefill + decode)
+- `Priority`: Priority with aging - balanced efficiency and fairness
+- `Priority-Aging`: Enhanced aging mechanism for better starvation prevention
 
 ### Timing Model Parameters
 

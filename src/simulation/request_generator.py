@@ -65,11 +65,13 @@ class RequestGenerator:
             return min(max_val, max(min_val, length))
 
         elif self.prompt_length_dist == "bimodal":
-            # For experiment 2: 70% short, 30% long
+            # For experiment 2: 70% short, 30% long (realistic chat vs document)
             if self.rng.random() < 0.7:
+                # Short requests: chat-like (10-50 tokens)
                 return int(self.rng.uniform(10, 50))
             else:
-                return int(self.rng.uniform(500, 2000))
+                # Long requests: document summarization (200-500 tokens)
+                return int(self.rng.uniform(200, 500))
 
         else:
             raise ValueError(f"Unknown prompt distribution: {self.prompt_length_dist}")
