@@ -1,15 +1,15 @@
 # LLM Inference Simulation
 
-A discrete-event simulation framework for analyzing LLM inference systems with continuous batching, built with SimPy. This project models the performance characteristics of systems like vLLM and SGLang, focusing on batching strategies and scheduling policies.
+A discrete-event simulation framework for analyzing LLM inference systems with static and adaptive batching, built with SimPy. This project models the performance characteristics of systems like vLLM and Orca, focusing on batching strategies and scheduling policies.
 
 ## Project Overview
 
 This simulation framework implements a two-phase LLM inference model based on the INDENG 174 Final Report:
 
 1. **Prefill Phase**: Parallel processing of input prompts (compute-bound)
-   - Formula: `T_prefill = α * Σ(l_prompt_i) + β`
+   - Formula: `T_prefill = α × Σ(l_prompt_i) + β`
 2. **Decode Phase**: Autoregressive token generation (memory-bound)
-   - Formula: `T_decode = γ * max(l_output_i)`
+   - Formula: `T_decode = γ × max(l_output_i)`
 
 ### Key Features
 
@@ -18,14 +18,14 @@ This simulation framework implements a two-phase LLM inference model based on th
 - **Flexible Workload Generation**: LogNormal, TruncatedNormal, PowerLaw, Bimodal distributions
 - **Non-stationary Arrival Patterns**: Constant, step, and sinusoidal arrival rates
 - **Comprehensive Metrics**: Latency percentiles, throughput, fairness index, starvation rate
-- **Statistical Rigor**: Built-in support for 30+ replications with 95% confidence intervals
+- **Statistical Rigor**: Built-in support for multiple replications with 95% confidence intervals
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- pip package manager
+- Conda (recommended) or pip
 
 ### Setup
 
@@ -34,7 +34,12 @@ This simulation framework implements a two-phase LLM inference model based on th
 cd llm-infer
 ```
 
-2. Install dependencies:
+2. Create and activate conda environment:
+```bash
+conda activate llm-infer
+```
+
+3. Or install dependencies with pip:
 ```bash
 pip install -r requirements.txt
 ```
@@ -44,29 +49,29 @@ pip install -r requirements.txt
 ```
 llm-infer/
 ├── src/
-│   ├── simulation/          # Core simulation components
-│   │   ├── request.py       # Request data structure
-│   │   ├── request_generator.py  # Workload generation
-│   │   ├── batch_processor.py    # Two-phase processing model
-│   │   ├── llm_server.py    # Main server simulation
-│   │   └── adaptive_server.py    # Adaptive batching server
-│   ├── scheduling/          # Scheduling policies
-│   │   └── policies.py      # FCFS, SJF, Predicted-SJF, Priority, Priority-Aging
-│   ├── metrics/             # Metrics collection and analysis
-│   │   └── collector.py     # MetricsCollector class
-│   └── experiments/         # Experiment configuration and runners
-│       ├── config.py        # Configuration dataclasses
-│       └── runner.py        # Simulation and experiment runners
-├── examples/                # Example scripts
-│   ├── simple_example.py    # Basic usage example
-│   ├── experiment1_batch_size.py      # Batch size sensitivity analysis
-│   ├── experiment2_scheduling_policies.py  # Scheduling policy comparison
-│   ├── experiment3_load_stress.py     # Load stress testing
-│   ├── experiment4_workload_distribution.py  # Workload distribution sensitivity
-│   └── experiment5_adaptive_batching.py  # Adaptive vs static batching
-├── llm-infer-report/        # LaTeX report files
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
+│   ├── simulation/              # Core simulation components
+│   │   ├── request.py           # Request data structure
+│   │   ├── request_generator.py # Workload generation
+│   │   ├── batch_processor.py   # Two-phase processing model
+│   │   ├── llm_server.py        # Main server simulation
+│   │   └── adaptive_server.py   # Adaptive batching server
+│   ├── scheduling/              # Scheduling policies
+│   │   └── policies.py          # FCFS, SJF, Predicted-SJF, Priority
+│   ├── metrics/                 # Metrics collection and analysis
+│   │   └── collector.py         # MetricsCollector class
+│   └── experiments/             # Experiment configuration and runners
+│       ├── config.py            # Configuration dataclasses
+│       └── runner.py            # Simulation and experiment runners
+├── examples/                    # Experiment scripts
+│   ├── simple_example.py        # Basic usage example
+│   ├── experiment1_batch_size.py
+│   ├── experiment2_scheduling_policies.py
+│   ├── experiment3_load_stress.py
+│   ├── experiment4_workload_distribution.py
+│   └── experiment5_adaptive_batching.py
+├── llm-infer-report/            # LaTeX report files
+├── requirements.txt             # Python dependencies
+└── README.md                    # This file
 ```
 
 ## Quick Start
@@ -74,6 +79,7 @@ llm-infer/
 Run a simple simulation:
 
 ```bash
+conda activate llm-infer
 python examples/simple_example.py
 ```
 
@@ -108,8 +114,6 @@ print(f"Throughput: {metrics['throughput_req_per_sec']:.2f} req/s")
 
 ### Running Experiments
 
-The framework supports multi-replication experiments for statistical rigor:
-
 ```python
 from src.experiments.config import SimulationConfig, ExperimentConfig
 from src.experiments.runner import ExperimentRunner
@@ -121,12 +125,12 @@ base_config = SimulationConfig(
     scheduling_policy="FCFS",
 )
 
-# Create experiment with 30 replications
+# Create experiment with multiple replications
 experiment = ExperimentConfig(
     name="example_experiment",
     description="Example experiment",
     base_config=base_config,
-    num_replications=30,
+    num_replications=10,
 )
 
 # Run all replications
@@ -142,59 +146,78 @@ print(f"95% CI: [{aggregated['avg_latency']['ci_lower']:.3f}, "
 
 ## Experiments
 
-The project includes five experiments based on the INDENG 174 Final Report:
+The project includes five experiments as described in the INDENG 174 Final Report:
 
 ### Experiment 1: Batch Size Sensitivity Analysis
 - **Parameters**: Batch sizes ∈ {1, 2, 4, 8, 16, 32, 64, 128}
 - **Fixed conditions**: λ = 10 req/s, FCFS scheduling
 - **Script**: `examples/experiment1_batch_size.py`
-- **Findings**: Optimal batch size ~32, U-shaped latency curve due to HOL blocking
+- **Key Findings**: 
+  - Optimal batch size: **16-32**
+  - B ≤ 8 causes queue explosion (876s latency at B=1)
+  - B ≥ 16 achieves stable throughput (~9.9 req/s)
 
 ### Experiment 2: Scheduling Policy Comparison
 - **Policies**: FCFS, SJF, Predicted-SJF, Priority with Aging
-- **Workload**: Bimodal (70% short 10-50 tokens, 30% long 500-2000 tokens)
+- **Workload**: Bimodal (70% short 10-50 tokens, 30% long 200-500 tokens)
+- **Fixed conditions**: λ = 18 req/s, B = 32
 - **Script**: `examples/experiment2_scheduling_policies.py`
-- **Findings**: SJF reduces avg latency ~15% but fairness drops (0.82→0.17), Priority with Aging balances both (~0.79)
+- **Key Findings**:
+  - SJF reduces avg latency by **37%** (9.15s vs 14.65s)
+  - But fairness drops dramatically: **0.87 → 0.09** (Jain's Index)
+  - **7%** starvation rate with SJF
+  - Priority with aging: balanced (0.84 fairness, 6% latency reduction)
 
 ### Experiment 3: Load Stress Testing
 - **Scenario**: Gradual load increase (λ = 1 to 50 req/s)
+- **Fixed conditions**: B = 32, FCFS
 - **Script**: `examples/experiment3_load_stress.py`
-- **Findings**: System saturates at ~18 req/s with B=32, queue grows exponentially beyond saturation
+- **Key Findings**:
+  - System saturates at **~20 req/s**
+  - Recommended max operating rate: **16 req/s** (80% safety margin)
+  - Queue explosion occurs beyond saturation point
 
 ### Experiment 4: Workload Distribution Sensitivity
 - **Distributions**: Uniform, LogNormal (σ=0.5, 1.0, 1.5), PowerLaw (α=1.5, 2.0, 2.5)
 - **Script**: `examples/experiment4_workload_distribution.py`
-- **Findings**: Heavy-tailed distributions (PowerLaw) increase tail latency significantly
+- **Key Findings**: Heavy-tailed distributions increase tail latency significantly
 
-### Experiment 5: Time-Varying Load & Adaptive Batching
-- **Pattern**: Sinusoidal λ(t) = 10 + 8sin(2πt/3600), peaks at 18 req/s
+### Experiment 5: Adaptive Batching under Traffic Spikes
+- **Scenario**: Normal load (10 req/s) → Spike (25 req/s) → Recovery
+- **Comparison**: Static B=32 vs Adaptive (B=32→64 during spikes)
 - **Script**: `examples/experiment5_adaptive_batching.py`
-- **Findings**: Adaptive batching reduces aggregate latency by ~22% vs static batching
+- **Key Findings**:
+  - Adaptive batching reduces aggregate latency by **54%**
+  - Max queue depth reduced by **84%**
+  - B=64 handles spikes well (3.1s vs 9.9s latency)
 
 ## Configuration Options
+
+### Timing Model Parameters (Calibrated)
+
+Based on realistic LLM inference characteristics:
+- `α = 0.00015` s/token (prefill per-token time)
+- `β = 0.008` s (prefill overhead)
+- `γ = 0.010` s/step (decode step time)
+
+These values result in a saturation point of ~20 req/s at B=32.
 
 ### Arrival Patterns
 - `constant`: Constant arrival rate
 - `step`: Step function (base → step rate at time t)
 - `sinusoidal`: Sinusoidal variation (hourly cycles)
 
-### Request Distributions
-- **Prompt lengths**: `lognormal`, `uniform`, `powerlaw`, `bimodal`
-- **Output lengths**: `truncated_normal`, `uniform`, `lognormal`
+### Request Length Distributions
+- **Prompt lengths**: `lognormal` (μ=3.5, σ=0.8), `uniform`, `powerlaw`, `bimodal`
+- **Output lengths**: `truncated_normal` (μ=80, σ=25), `uniform`, `lognormal`
 
 ### Scheduling Policies
-- `FCFS`: First-Come-First-Serve (arrival time) - highest fairness
-- `SJF`: Shortest Job First (prompt length) - lowest latency, poor fairness
-- `Predicted-SJF`: Estimated total processing time (prefill + decode)
-- `Priority`: Priority with aging - balanced efficiency and fairness
-- `Priority-Aging`: Enhanced aging mechanism for better starvation prevention
-
-### Timing Model Parameters
-
-Based on realistic LLM inference characteristics:
-- `alpha = 0.001` s/token (prefill per-token time)
-- `beta = 0.05` s (prefill overhead)
-- `gamma = 0.0005` s/step (decode step time)
+| Policy | Description | Latency | Fairness |
+|--------|-------------|---------|----------|
+| `FCFS` | First-Come-First-Serve | Baseline | High (0.87) |
+| `SJF` | Shortest Job First | -37% | Low (0.09) |
+| `Predicted-SJF` | Estimated processing time | -38% | Low (0.09) |
+| `Priority` | Priority with aging | -6% | High (0.84) |
 
 ## Metrics
 
@@ -203,36 +226,31 @@ The simulation collects comprehensive metrics:
 ### Latency Metrics
 - Average, median, min, max latency
 - P50, P95, P99 percentiles
-- Queue wait time
-- Processing time
+- Queue wait time / Processing time
 
 ### Throughput Metrics
 - Requests per second
 - Tokens per second
-- GPU utilization (via batch statistics)
 
 ### Fairness Metrics
-- Jain's fairness index
-- Starvation rate (requests with excessive wait times)
+- **Jain's Fairness Index**: (Σxᵢ)² / (n × Σxᵢ²), values near 1 indicate perfect fairness
+- **Starvation Rate**: Percentage of requests with excessive wait times (>10× median)
 
 ### System Metrics
 - Max queue length
 - Average batch size
 - Total batches processed
 
-## Development
+## Report
 
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Code Formatting
+The full technical report is available in `llm-infer-report/`. To compile:
 
 ```bash
-black src/ examples/
-flake8 src/ examples/
+cd llm-infer-report
+pdflatex main.tex
+bibtex main
+pdflatex main.tex
+pdflatex main.tex
 ```
 
 ## References
@@ -240,16 +258,18 @@ flake8 src/ examples/
 This project implements concepts from:
 
 - Kwon et al. (2023): "Efficient Memory Management for Large Language Model Serving with PagedAttention" (vLLM)
-- Zheng et al. (2024): "SGLang: Efficient Execution of Structured Language Model Programs"
-- Jain et al. (1984): "A Quantitative Measure Of Fairness And Discrimination For Resource Allocation In Shared Computer Systems"
+- Yu et al. (2022): "Orca: A Distributed Serving System for Transformer-Based Generative Models"
+- Agrawal et al. (2024): "Taming Throughput-Latency Tradeoff in LLM Inference with Sarathi-Serve"
+- Sheng et al. (2024): "Fairness in Serving Large Language Models"
+- Law (2015): "Simulation Modeling and Analysis"
 
 ## Authors
 
 **INDENG 174 Group 9**
-- Runyuan He (3041920716)
-- Jiedong Zhang (3041913865)
-- Qingyang Xu (3041979645)
+- Runyuan He
+- Jiedong Zhang
+- Qingyang Xu
 
 ## License
 
-This project is for academic purposes as part of INDENG 174 coursework.
+This project is for academic purposes as part of INDENG 174 coursework at UC Berkeley.
